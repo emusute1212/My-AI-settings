@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Commit Skill"
+  short_description: "Split work into small, prefix-based commits"
+  default_prompt: "Inspect the working tree, split the changes into the smallest reasonable commits, and commit them with the allowed prefixes."
