@@ -104,5 +104,6 @@ When adding detail lines:
 ## Response expectations
 When applying this skill:
 - Explain how the changes should be split if the work is non-trivial.
+- When confirming commit granularity with the user, show the relevant `git diff` output instead of only summarizing the scope. Use `git diff --cached` when the confirmation is about staged changes.
 - Present the planned commit subjects before committing when the split is not obvious.
 - After each commit, report the commit subject and the verification result.
