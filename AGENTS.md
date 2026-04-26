@@ -12,11 +12,8 @@ Use this when the user gives a high-level or rough request or requirements are s
   - MVP first (smallest working version).
   - Confirm direction before expanding scope or doing broad refactors.
 - Prefer minimal, reversible changes over "big-bang" rewrites.
+- When defining command-line arguments or environment variables:
+  - Start with the minimum set required to make the feature work.
+  - Avoid adding optional knobs unless they are clearly justified.
+  - Confirm proposed arguments and environment variables with the user before adding them.
 - Always include a verification step (tests, build, run, or a repro checklist).
-
-## Skill Authoring Requests
-
-Use this when the user asks to add or create a new skill.
-
-- Write `SKILL.md` content in English.
-- Keep all user-facing conversation in Japanese.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codexスキル作成"
+  short_description: "配置先を決めて日本語スキル作成をskill-creatorへ委譲する"
+  default_prompt: "$create-skill を使って、配置先を決めたうえでこのスキル作成依頼を日本語で進めてください。"
