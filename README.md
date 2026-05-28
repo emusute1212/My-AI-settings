@@ -1,181 +1,70 @@
 # 共有エージェント設定の使い方
 
-このリポジトリは、エージェント用の設定ファイルや `skills/` をまとめて管理し、必要なツールからシンボリックリンクで参照するための置き場所です。
+私のホームディレクトリにおいているAI設定ファイル群です。
+基本的に各種AI Agentにsymlinkして利用することを想定しています。
 
-この README では、以下の 2 点を説明します。
+## 対応Agent
 
-- このディレクトリ名を `My-AI-settings` 以外の好きな名前に変更する方法
-- `AGENTS.md` や `skills/` などを `~/.claude` や `~/.codex` にシンボリックリンクする方法
+- Codex
+- ClaudeCode
 
 ## 想定構成
 
-このリポジトリには、たとえば以下のようなファイルがあります。
+`skills/`以下ディレクトリを一つずつ各種AI Agentファイル群へsymlinkします。他のディレクトリも同じです。
 
-- `AGENTS.md`
-- `skills/`
-- `README.md`
+`AGENTS.md`は`$HOME/CLAUDE.md`や`$HOME/AGENTS.md`へsymlinkします。
 
-利用するツール側では、これらを直接コピーするのではなく、シンボリックリンクで参照すると管理が楽です。
+## セットアップ
 
-## 1. ディレクトリ名を好きな名前に変更する
-
-このリポジトリのディレクトリ名は `My-AI-settings` である必要はありません。たとえば `~/.my-agents` や `~/agent-config` のような好きな名前に変更できます。
-
-### 例: `My-AI-settings` を `.my-agents` に変更する
+このディレクトリでスクリプトを実行します。
 
 ```bash
-git clone git@github.com:emusute1212/My-AI-settings.git ~/.my-agents
+./sync-agent-links.sh
 ```
 
-もしくはクローンしたあとで以下を実行する。
+## 作成されるリンク
 
-```bash
-mv ~/My-AI-settings ~/.my-agents
-```
-
-変更後は、以降のリンク先も新しいパスに合わせて指定してください。
-
-たとえば、以降の説明では次のように変数を置いておくと分かりやすくなります。
-
-```bash
-AGENT_HOME=~/.my-agents
-```
-
-もしディレクトリ名を変更しない場合は、そのまま以下を使えます。
-
-```bash
-AGENT_HOME=~/.agents
-```
-
-## 2. `~/.claude` にシンボリックリンクする
-
-まず、`~/.claude` ディレクトリがなければ作成します。
-
-```bash
-mkdir -p ~/.claude
-```
-
-既に同名のファイルやディレクトリがある場合は、先に退避してからリンクするのが安全です。
-
-```bash
-if [ -e ~/.claude/AGENTS.md ] || [ -L ~/.claude/AGENTS.md ]; then
-  mv ~/.claude/AGENTS.md ~/.claude/AGENTS.md.bak
-fi
-
-if [ -e ~/.claude/skills ] || [ -L ~/.claude/skills ]; then
-  mv ~/.claude/skills ~/.claude/skills.bak
-fi
-
-ln -s "$AGENT_HOME/AGENTS.md" ~/.claude/AGENTS.md
-ln -s "$AGENT_HOME/skills" ~/.claude/skills
-```
-
-### コマンドの意味
-
-- `ln -s` : シンボリックリンクを作成します
-- `mv ... .bak` : 既存のファイルやディレクトリをバックアップします
-
-すでにリンク済みのものを手早く張り直したい場合だけ、以下のように `ln -sfn` を使っても構いません。
-
-```bash
-ln -sfn "$AGENT_HOME/AGENTS.md" ~/.claude/AGENTS.md
-ln -sfn "$AGENT_HOME/skills" ~/.claude/skills
-```
-
-ただし、`~/.claude/skills` が実ディレクトリとして存在している場合は、先に退避してから実行してください。
-
-## 3. `~/.codex` にシンボリックリンクする
-
-同様に、`~/.codex` にもリンクできます。
-
-```bash
-mkdir -p ~/.codex
-
-if [ -e ~/.codex/AGENTS.md ] || [ -L ~/.codex/AGENTS.md ]; then
-  mv ~/.codex/AGENTS.md ~/.codex/AGENTS.md.bak
-fi
-
-if [ -e ~/.codex/skills ] || [ -L ~/.codex/skills ]; then
-  mv ~/.codex/skills ~/.codex/skills.bak
-fi
-
-ln -s "$AGENT_HOME/AGENTS.md" ~/.codex/AGENTS.md
-ln -s "$AGENT_HOME/skills" ~/.codex/skills
-```
-
-必要に応じて、ほかのファイルも同じ要領でリンクできます。
-
-```bash
-ln -s "$AGENT_HOME/README.md" ~/.codex/README.md
-```
-
-## 4. まとめて設定する例
-
-`.claude` と `.codex` の両方へまとめてリンクする場合は、以下のように実行できます。
-
-```bash
-AGENT_HOME=~/.my-agents
-
-mkdir -p ~/.claude ~/.codex
-
-if [ -e ~/.claude/AGENTS.md ] || [ -L ~/.claude/AGENTS.md ]; then
-  mv ~/.claude/AGENTS.md ~/.claude/AGENTS.md.bak
-fi
-if [ -e ~/.claude/skills ] || [ -L ~/.claude/skills ]; then
-  mv ~/.claude/skills ~/.claude/skills.bak
-fi
-ln -s "$AGENT_HOME/AGENTS.md" ~/.claude/AGENTS.md
-ln -s "$AGENT_HOME/skills" ~/.claude/skills
-
-if [ -e ~/.codex/AGENTS.md ] || [ -L ~/.codex/AGENTS.md ]; then
-  mv ~/.codex/AGENTS.md ~/.codex/AGENTS.md.bak
-fi
-if [ -e ~/.codex/skills ] || [ -L ~/.codex/skills ]; then
-  mv ~/.codex/skills ~/.codex/skills.bak
-fi
-ln -s "$AGENT_HOME/AGENTS.md" ~/.codex/AGENTS.md
-ln -s "$AGENT_HOME/skills" ~/.codex/skills
-```
-
-`.agents` のまま使う場合は、1 行目だけ以下に置き換えてください。
-
-```bash
-AGENT_HOME=~/.agents
-```
-
-## 5. 設定を確認する
-
-リンクが正しく作成されたかは `ls -l` で確認できます。
-
-```bash
-ls -l ~/.claude
-ls -l ~/.codex
-```
-
-出力例:
+`sync-agent-links.sh` は、以下のリンクを作成します。
 
 ```text
-AGENTS.md -> /Users/your-name/.my-agents/AGENTS.md
-skills -> /Users/your-name/.my-agents/skills
+~/.codex/skills/<skill名>  ->  ./skills/<skill名>
+~/.claude/skills/<skill名> ->  ./skills/<skill名>
+
+~/.codex/agents/<agent名>  ->  ./agents/<agent名>
+~/.claude/agents/<agent名> ->  ./agents/<agent名>
+
+~/AGENTS.md  ->  ./AGENTS.md
+~/CLAUDE.md  ->  ./AGENTS.md
 ```
 
-リンク先が想定どおりであれば設定完了です。
+リンク元はフルパスで作成されます。
 
-## 6. 運用のポイント
+## 競合した場合
 
-- 実体ファイルはこのリポジトリ側だけを編集します
-- `~/.claude` や `~/.codex` 側はリンク経由で参照させます
-- 管理場所を変えたくなった場合は、元ディレクトリを移動してリンクを張り直すだけで対応できます
+リンク先に同名のファイル、ディレクトリ、または別の symlink が既にある場合、スクリプトは勝手に上書きせず確認します。
 
-## 7. 最小セット
+```text
+replace "/Users/you/.codex/skills/foo" with symlink to "/Users/you/My-AI-settings/skills/foo"? [y/N]
+```
 
-初回セットアップのように、リンク先の同名ファイルやディレクトリがまだ存在しない場合は、以下だけでも運用できます。
+`y` / `Y` / `yes` / `YES` と入力すると置き換えます。それ以外はスキップします。
+
+既に正しいリンクがある場合は、何も変更せず `ok` と表示されます。
+
+## 確認方法
+
+リンクが正しく作成されたかは `ls -l` や `readlink` で確認できます。
 
 ```bash
-AGENT_HOME=~/.agents
-mkdir -p ~/.claude ~/.codex
-ln -s "$AGENT_HOME/AGENTS.md" ~/.claude/AGENTS.md
-ln -s "$AGENT_HOME/skills" ~/.claude/skills
-ln -s "$AGENT_HOME/AGENTS.md" ~/.codex/AGENTS.md
-ln -s "$AGENT_HOME/skills" ~/.codex/skills
+ls -l ~/.codex/skills
+ls -l ~/.claude/skills
+readlink ~/AGENTS.md
+readlink ~/CLAUDE.md
 ```
+
+## 運用のポイント
+
+- 実体ファイルはこのリポジトリ側だけを編集します
+- Codex や Claude 側には symlink 経由で同じ実体を見せます
+- `skills/` や `agents/` に新しいディレクトリを追加したら、もう一度 `./sync-agent-links.sh` を実行します
+- ディレクトリ名を変えた場合は、移動後の場所で再実行するとリンクを張り直せます

@@ -3,6 +3,7 @@
 set -eu
 
 HOME_DIR=${HOME:?HOME is not set}
+SOURCE_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 confirm_replace() {
   dest_path=$1
@@ -63,7 +64,40 @@ link_children() {
   done
 }
 
-link_children "$HOME_DIR/.agents/skills" "$HOME_DIR/.codex/skills"
-link_children "$HOME_DIR/.agents/skills" "$HOME_DIR/.claude/skills"
-link_children "$HOME_DIR/.agents/agents" "$HOME_DIR/.codex/agents"
-link_children "$HOME_DIR/.agents/agents" "$HOME_DIR/.claude/agents"
+link_path() {
+  src_path=$1
+  dest_path=$2
+
+  if [ ! -e "$src_path" ]; then
+    printf 'skip: source path does not exist: %s\n' "$src_path"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$dest_path")"
+
+  if [ -L "$dest_path" ]; then
+    current_target=$(readlink "$dest_path")
+    if [ "$current_target" = "$src_path" ]; then
+      printf 'ok: %s -> %s\n' "$dest_path" "$src_path"
+      return 0
+    fi
+
+    if ! confirm_replace "$dest_path" "$src_path" "conflict: symlink already exists with different target: $dest_path -> $current_target"; then
+      return 0
+    fi
+  elif [ -e "$dest_path" ]; then
+    if ! confirm_replace "$dest_path" "$src_path" "conflict: destination already exists and is not a symlink: $dest_path"; then
+      return 0
+    fi
+  fi
+
+  ln -s "$src_path" "$dest_path"
+  printf 'linked: %s -> %s\n' "$dest_path" "$src_path"
+}
+
+link_children "$SOURCE_ROOT/skills" "$HOME_DIR/.codex/skills"
+link_children "$SOURCE_ROOT/skills" "$HOME_DIR/.claude/skills"
+link_children "$SOURCE_ROOT/agents" "$HOME_DIR/.codex/agents"
+link_children "$SOURCE_ROOT/agents" "$HOME_DIR/.claude/agents"
+link_path "$SOURCE_ROOT/AGENTS.md" "$HOME_DIR/AGENTS.md"
+link_path "$SOURCE_ROOT/AGENTS.md" "$HOME_DIR/CLAUDE.md"
