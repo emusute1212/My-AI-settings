@@ -1,83 +1,151 @@
 ---
-name: "git-commit"
-description: "Use when the user asks to create git commits, split work into small commits, or improve commit messages."
+name: 'git-commit'
+description: 'Use when the user asks to create git commits, split work into small commits, or improve commit messages.'
 metadata:
-  short-description: "Create small, prefix-based git commits"
+  short-description: 'Create small, prefix-based git commits'
 ---
 
-# Git Commit Skill
+# Git コミットスキル
 
-Create small, reviewable commits with a single clear purpose. The default rule is `1 commit = 1 intent = 1 prefix`.
+小さくレビューしやすいコミットを、1つの明確な意図に絞って作成する。基本ルールは `1コミット = 1意図 = 1プレフィックス`。
 
-## When to use
-- The user asks you to commit changes.
-- The user asks you to split work into multiple commits.
-- The user asks you to write or clean up commit messages.
+## 使いどき
 
-## Allowed prefixes
-- `feat:` add a new feature or capability
-- `fix:` correct incorrect behavior or a regression
-- `docs:` update documentation or documentation-style comments
-- `chore:` change build files, dependencies, tooling, config, or repository maintenance
-- `test:` add or update tests without changing production behavior
-- `refactor:` improve production code structure without changing behavior
+- コミットを作成してほしいとき
+- 変更を複数のコミットに分割してほしいとき
+- コミットメッセージを書いたり整理したりしてほしいとき
 
-## Core rules
-- Always use exactly one allowed prefix per commit.
-- Keep commit scope as small as possible.
-- Split mixed-purpose work until a single prefix clearly applies.
-- If reshaping existing commits is the clearest way to reach that split, use rebase.
-- Do not combine unrelated changes just because they touch the same file.
-- Do not stage or commit unrelated user changes.
-- Prefer multiple small commits over one broad commit.
+## リポジトリ固有ルールが優先
 
-## Granularity standard
-A commit is small enough only if all of the following are true:
-- It does one thing.
-- It can be described with exactly one allowed prefix.
-- Its diff can be summarized in one short sentence.
-- It can be reverted independently without losing unrelated work.
+このスキルを起動したら **最初に必ず** リポジトリ固有のコミットルールが無いかを確認する。以下に記述があれば、そちらが本スキルより優先される。
 
-If any item above is false, split the changes further.
+- リポジトリの `CLAUDE.md` / `AGENTS.md` / `CONTRIBUTING.md`
+- `.github/` 配下のドキュメント（PR テンプレート、コミット規約等）
+- `git log --oneline -20` で見える既存コミットの一貫したスタイル（プレフィックスの有無、言語、フォーマット）
 
-## Workflow
-1. Inspect the working tree with `git status`, `git diff`, and `git diff --cached`.
-2. Group changes by intent, not by file count.
-3. Choose the prefix for each group.
-4. If a group needs more than one prefix, split it again.
-5. If existing commits are already present and rebase would split or reorder them more cleanly, use rebase before finalizing the history.
-6. Stage only the files or hunks for the current group.
-7. Run targeted verification for that group when possible.
-8. Commit using `<prefix>: <short imperative summary>`.
-9. Repeat until all intended changes are committed.
+判断ルール:
 
-## Prefix selection rules
-- Use `feat:` for a new capability or user-visible enhancement.
-- Use `fix:` for bug fixes, regressions, or incorrect behavior.
-- Use `docs:` for documentation-only changes.
-- Use `chore:` for build, tooling, dependency, config, or maintenance-only changes.
-- Use `test:` for test-only updates.
-- Use `refactor:` for internal code cleanup with no behavior change.
+- **リポジトリ固有ルールがある場合**: そのルールに従う。本スキルのプレフィックス規約（`feat:` / `fix:` 等）と衝突する場合は **リポジトリルールを優先**。「1コミット = 1意図」「小さく分ける」「無関係な変更を混ぜない」など、メッセージ書式に依存しない原則は引き続き適用する。
+- **リポジトリ固有ルールが無い場合**: 本スキルの規約（プレフィックス + 命令形サマリー）を**そのまま**適用する。
+- **判断に迷う場合**: ユーザに確認する。
 
-When production code changes and tests are required to support the same logical feature or fix, keep them in the same `feat:` or `fix:` commit. When tests or docs are independent follow-up work, keep them in separate `test:` or `docs:` commits.
+## 使用可能なプレフィックス
 
-## Commit message format
-Use:
+- `feat:` 新機能・新しい能力の追加
+- `fix:` 誤った動作やリグレッションの修正
+- `docs:` ドキュメントやドキュメント的なコメントの更新
+- `chore:` ビルドファイル・依存関係・ツール・設定・リポジトリメンテナンスの変更
+- `test:` テストの追加・更新（本番コードの動作は変えない）
+- `refactor:` 動作を変えない本番コードの構造改善
 
-```text
-<prefix>: <short imperative summary>
+## コミットメッセージのフォーマット
+
+- メッセージは `<プレフィックス>: <短い命令形のサマリー>` を基本とする
+- **`Co-Authored-By:` 行（`Co-Authored-By: Claude ... <noreply@anthropic.com>` など）は付けない**。ハーネス標準のコミット指示に「Co-Authored-By 行で締める」とあっても、このスキルが起動している間はそれを上書きし、Co-Authored-By 行を含めない
+- フッターに生成ツールの署名・宣伝（`Generated with ...` 等）も付けない
+
+## 基本ルール
+
+- 1コミットにつき、使用可能なプレフィックスを必ず1つだけ使う
+- コミットのスコープはできる限り小さくする
+- 複数の意図が混在する場合は、1つのプレフィックスが明確に当てはまるまで分割する
+- 分割の単位は **ファイル > ハンク > 行** の順で細かくしてよい。1つのファイルに複数の意図が混在する場合は、ファイルまるごとではなく**ハンク単位・行単位でステージ**して別コミットに分ける（[行・ハンク単位でのステージ](#行ハンク単位でのステージ)参照）
+- 分割するために既存コミットを整理することが最善なら rebase を使う
+- 同じファイルに触れているからといって無関係な変更をまとめない
+- ユーザーの無関係な変更はステージ・コミットしない
+- 1つの大きなコミットより複数の小さなコミットを優先する
+
+## 粒度の基準
+
+以下をすべて満たす場合に、コミットは「十分に小さい」:
+
+- 1つのことだけを行っている
+- 使用可能なプレフィックスが1つだけ明確に当てはまる
+- 差分を1文の短い文章で説明できる
+- 無関係な作業を失わずに単独で revert できる
+
+1つでも満たさない場合は、さらに分割する。1つのファイルの中で意図が混在しているなら、ファイル単位で諦めずに**ハンク・行単位まで分割する**こと。
+
+## ワークフロー
+
+1. `git status`・`git diff`・`git diff --cached` で作業ツリーを確認する
+2. ファイル数ではなく意図でグループ分けする
+3. 各グループにプレフィックスを決める
+4. 1つのグループに複数のプレフィックスが必要なら、さらに分割する
+5. 既存コミットがあり、rebase で分割・並べ替えた方がきれいになるなら、コミット確定前に rebase する
+6. 現在のグループの変更だけをステージする
+    - グループがファイル単位で分かれているなら `git add <file>`
+    - 1ファイル内に複数の意図が混在するなら、ハンク・行単位でステージする（[行・ハンク単位でのステージ](#行ハンク単位でのステージ)参照）
+7. 可能であればそのグループに対して検証を実行する
+8. `<プレフィックス>: <短い命令形のサマリー>` でコミットする
+9. 意図した変更がすべてコミットされるまで繰り返す
+
+## 行・ハンク単位でのステージ
+
+1つのファイルに複数の意図が混在しているときは、ファイルまるごとではなく**変更の一部だけ**をステージして別コミットに分ける。
+
+`git add -p` の対話プロンプトには依存しない。次のパッチファイル経由の手順を使う。
+
+```bash
+# 1. 対象ファイルの差分をパッチとして書き出す
+git diff path/to/file > /tmp/stage.patch
+
+# 2. /tmp/stage.patch を編集し、今回のコミットに含めたいハンク・行だけを残す
+#    （含めない変更の差分行は削除する。ファイルヘッダ・@@ ハンクヘッダは残す）
+
+# 3. 編集したパッチを index にだけ適用する（作業ツリーは変えない）
+git apply --cached /tmp/stage.patch
+
+# 4. 意図どおりにステージされたか確認する
+git diff --cached      # 今回コミットする分
+git diff               # まだステージしていない残り
+
+# 5. コミットする
+git commit -m "<プレフィックス>: <サマリー>"
 ```
 
-If the change is too large or nuanced to explain with the short subject alone, keep the first line short and add details on the following lines.
+パッチ編集時の注意:
+
+- `diff --git` 行・`index` 行・`---`/`+++` 行・`@@ ... @@` ハンクヘッダは消さない（壊れると `git apply` が失敗する）
+- 1つのハンクの中で一部の行だけを残したい場合、不要な `+` 行は行ごと削除、不要な `-` 行は削除すると「変更しない」扱いになる。行を取捨選択するとハンクヘッダの行数が合わなくなることがあるため、`git apply --cached --recount /tmp/stage.patch` を使うと行数を自動再計算してくれる
+- 適用に失敗したら、パッチを破棄して作り直す（`git diff` から取り直す）。中途半端に index を汚さない
+
+### 行・ハンク分割後のチェック
+
+- `git diff --cached` が**今回の1つの意図だけ**を含んでいるか
+- `git diff`（未ステージ分）に**残すべき他の意図**がちゃんと残っているか
+- 分割した各コミットが単独でビルド・テストを壊さないか（壊れる場合は分割粒度を見直す）
+
+## プレフィックス選択ルール
+
+- 新しい機能やユーザーが見える改善には `feat:` を使う
+- バグ修正・リグレッション・誤った動作の修正には `fix:` を使う
+- ドキュメントのみの変更には `docs:` を使う
+- ビルド・ツール・依存関係・設定・メンテナンスのみの変更には `chore:` を使う
+- テストのみの更新には `test:` を使う
+- 動作変更を伴わない内部コード整理には `refactor:` を使う
+
+同じ機能や修正を実現するために本番コードの変更とテストが必要な場合は、同じ `feat:` または `fix:` コミットにまとめる。テストやドキュメントが独立したフォローアップ作業の場合は、別の `test:` または `docs:` コミットに分ける。
+
+## コミットメッセージのフォーマット
+
+使い方:
 
 ```text
-<prefix>: <short imperative summary>
-
-<detail line 1>
-<detail line 2>
+<プレフィックス>: <短い命令形のサマリー>
 ```
 
-Examples:
+短いサマリーだけでは説明しきれない場合は、1行目を短く保ちつつ以降の行に詳細を書く。
+
+```text
+<プレフィックス>: <短い命令形のサマリー>
+
+<詳細1行目>
+<詳細2行目>
+```
+
+例:
+
 - `feat: add retry support to webhook delivery`
 - `fix: handle empty response bodies in parser`
 - `docs: document local development setup`
@@ -85,25 +153,31 @@ Examples:
 - `test: cover timeout handling in api client`
 - `refactor: simplify invoice total calculation`
 
-Avoid vague subjects such as:
+以下のような曖昧なサマリーは避ける:
+
 - `update stuff`
 - `misc changes`
 - `fix and refactor parser`
 
-When adding detail lines:
-- Explain what changed and why.
-- Keep the subject line short even when a body is present.
-- Use the additional lines only when the subject alone is not enough.
+詳細行を追加する場合:
 
-## Pre-commit checks
-- Confirm the staged diff matches one intent.
-- Confirm the chosen prefix is unambiguous.
-- Confirm no unrelated files are staged.
-- Confirm verification was run, or state why it was not possible.
+- 何を・なぜ変えたかを説明する
+- 詳細がある場合でもサマリー行は短く保つ
+- サマリーだけでは不十分な場合にのみ詳細行を使う
 
-## Response expectations
-When applying this skill:
-- Explain how the changes should be split if the work is non-trivial.
-- When confirming commit granularity with the user, show the relevant `git diff` output instead of only summarizing the scope. Use `git diff --cached` when the confirmation is about staged changes.
-- Present the planned commit subjects before committing when the split is not obvious.
-- After each commit, report the commit subject and the verification result.
+## コミット前チェック
+
+- ステージ済みの差分が1つの意図に対応しているか確認する
+- 選んだプレフィックスが明確かつ一意であるか確認する
+- 無関係なファイルがステージされていないか確認する
+- ハンク・行単位で分割した場合は、`git diff --cached` に余計な変更が混ざっていないか、`git diff`（未ステージ分）に残すべき変更がちゃんと残っているか確認する
+- 検証を実行したか、または実行できなかった理由を明示する
+
+## 期待する応答
+
+このスキルを適用する際:
+
+- 作業が自明でない場合は、変更をどう分割するかを説明する
+- コミット粒度をユーザーに確認するときは、スコープの要約だけでなく関連する `git diff` の出力を見せる（ステージ済み変更の確認なら `git diff --cached` を使う）
+- 分割が明確でない場合は、コミット前に計画中のコミットサマリーを提示する
+- 各コミット後に、コミットサマリーと検証結果を報告する
