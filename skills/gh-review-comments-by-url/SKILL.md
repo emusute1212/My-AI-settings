@@ -1,60 +1,128 @@
 ---
 name: gh-review-comments-by-url
-description: Address GitHub PR review comments for a provided PR URL. Use only when the user explicitly invokes this skill and provides a pull request URL. Fetch review comments/threads, process them one by one, reply on each review thread using `review_threads[].id` and `addPullRequestReviewThreadReply`, include commit logs for addressed items, and post reasoned skip replies for non-actionable items.
+description: 指定された GitHub PR URL のレビューコメントに対応する。ユーザーがこのスキルを明示的に呼び出し、pull request URL を提供した場合のみ使う。コメントやレビューの取得、返信投稿など GitHub への接続はすべて `gh` コマンド経由で行う。レビューコメントとスレッドを取得し、1件ずつ処理し、`reviewThreads.nodes[].id` と `addPullRequestReviewThreadReply` で各レビュー スレッドに返信する。対応した項目にはコミットログを含め、対応しない項目には理由を添えて返信する。
 ---
 
-# PR Review Comment Handler (URL Input)
+# PR レビューコメント対応（URL 入力）
 
-## 1) Confirm prerequisites
-- Ensure GitHub CLI is authenticated by running `gh auth status`.
-- Run `gh` commands with elevated network permissions when sandboxing blocks access.
-- If auth fails, ask the user to run `gh auth login` and retry.
-- Require a URL in this format: `https://github.com/<owner>/<repo>/pull/<number>`.
-- If the user did not provide a PR URL yet, ask for it before running any fetch steps.
+## 1) 前提条件を確認する
+- GitHub への接続はすべて GitHub CLI の `gh` コマンドで行う。直接 HTTP クライアント、GitHub SDK、個別トークン読み込みには切り替えない。
+- `gh auth status` を実行し、GitHub CLI が認証済みであることを確認する。
+- サンドボックスによりネットワークアクセスがブロックされる場合は、昇格したネットワーク権限で `gh` コマンドを実行する。
+- 認証に失敗した場合は、ユーザーに `gh auth login` の実行を依頼してから再試行する。
+- URL は `https://github.com/<owner>/<repo>/pull/<number>` 形式である必要がある。
+- ユーザーがまだ PR URL を提供していない場合は、取得処理を始める前に URL を尋ねる。
 
-## 2) Fetch review data from the PR URL
-- Run `python3 scripts/fetch_pr_comments.py "<PR_URL>"`.
-- Use the JSON output to enumerate items from `review_threads`, `reviews`, and `conversation_comments`.
-- For each thread item, keep `review_threads[].id` as `THREAD_ID` for reply posting.
-- Build a numbered list for processing.
+## 2) PR URL からレビュー情報を取得する
+- PR URL から `OWNER`、`REPO`、`NUMBER` を読み取る。
+- `gh api graphql` を直接実行して PR 情報、conversation comments、reviews、review threads を取得する。
+- 取得時も GitHub への接続経路は `gh` のみとする。
+- 例:
+```bash
+PR_DATA=$(gh api graphql \
+  -F owner="$OWNER" \
+  -F repo="$REPO" \
+  -F number="$NUMBER" \
+  -f query='
+    query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $number) {
+          number
+          url
+          title
+          state
+          comments(first: 100) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              body
+              createdAt
+              updatedAt
+              author { login }
+            }
+          }
+          reviews(first: 100) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              state
+              body
+              submittedAt
+              author { login }
+            }
+          }
+          reviewThreads(first: 100) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              isResolved
+              isOutdated
+              path
+              line
+              diffSide
+              startLine
+              startDiffSide
+              originalLine
+              originalStartLine
+              resolvedBy { login }
+              comments(first: 100) {
+                nodes {
+                  id
+                  body
+                  createdAt
+                  updatedAt
+                  author { login }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ')
+```
+- `pageInfo.hasNextPage` が `true` の接続がある場合は、該当する `endCursor` を `after:` 変数として追加し、同じ `gh api graphql` 形式で続きのページを取得する。
+- JSON 出力の `.data.repository.pullRequest.reviewThreads.nodes`、`.data.repository.pullRequest.reviews.nodes`、`.data.repository.pullRequest.comments.nodes` から項目を列挙する。
+- 各スレッド項目では、返信投稿用に `.data.repository.pullRequest.reviewThreads.nodes[].id` を `THREAD_ID` として保持する。
+- 処理対象を番号付きリストにする。
 
-## 3) Triage items
-- Classify each item as either `actionable` or `skip`.
-- Before deciding `actionable`, verify the review request itself against current code, tests, and repository conventions.
-- Skip only when clearly justified.
-- Common skip reason: already resolved or outdated without required code change.
-- Common skip reason: outside the PR scope.
-- Common skip reason: factually incorrect request based on code/tests.
-- Common skip reason: pure preference that conflicts with established repository conventions.
-- When uncertain, ask the user before skipping.
+## 3) 項目を仕分ける
+- 各項目を `actionable`（対応する）または `skip`（対応を見送る）に分類する。
+- `actionable` と判断する前に、レビュー依頼の内容を現在のコード、テスト、リポジトリの慣習に照らして確認する。
+- 明確な理由がある場合のみ `skip` にする。
+- よくある見送り理由: すでに解決済み、またはコード変更が不要な古い指摘。
+- よくある見送り理由: PR のスコープ外。
+- よくある見送り理由: コードやテストに照らすと事実と異なる指摘。
+- よくある見送り理由: 既存のリポジトリ慣習と衝突する純粋な好みの指摘。
+- 判断に迷う場合は、見送る前にユーザーへ確認する。
 
-## 4) Address actionable items one by one
-- Process sequentially, not in bulk.
-- Use a strict per-item loop and do not move to the next item before finishing the current one:
-  - Item N analysis
-  - Item N implementation (working tree only)
-  - Item N user confirmation
-  - Item N commit
-  - then move to Item N+1
-- Before starting each actionable item, record `START_SHA=$(git rev-parse HEAD)`.
-- Apply minimal and reversible changes per item in the working tree first (do not commit yet).
-- Run targeted verification after each change (tests, lint, or build relevant to affected code).
-- Review the patch quality before committing (for example `git diff` and affected file checks).
-- Before commit, explicitly confirm all three points with the user for the current item:
-  - the PR review comment interpretation is valid
-  - the proposed fix approach is valid
-  - the actual code changes are valid (show concrete changed files/hunks, not only a plan)
-- Do not commit if any of the three points is not yet confirmed.
-- If the user requests adjustments, revise the code and re-run verification before asking again.
-- Create at least one commit for each actionable item only after explicit user approval.
-- After commit for Item N, collect `COMMIT_LOG` and prepare the Item N reply body, but do not post yet.
-- Build per-item commit log with `COMMIT_LOG=$(git log --reverse --pretty=format:'- %h %s' "${START_SHA}..HEAD")`.
-- If `COMMIT_LOG` is empty, do not post a completion reply yet. Create the missing commit first.
-- Record which item number each change addresses.
+## 4) 対応が必要な項目を1件ずつ処理する
+- まとめて処理せず、順番に1件ずつ処理する。
+- 厳密な項目単位のループを使い、現在の項目が完了するまで次の項目へ進まない。
+- Item N の分析
+- Item N の実装（作業ツリーのみ）
+- Item N のユーザー確認
+- Item N のコミット
+- その後に Item N+1 へ進む
+- 各 `actionable` 項目を開始する前に、`START_SHA=$(git rev-parse HEAD)` を記録する。
+- まず作業ツリー上で、項目ごとに最小限かつ戻しやすい変更を適用する（この時点ではコミットしない）。
+- 変更後、影響範囲に応じた検証を実行する（テスト、lint、build など）。
+- コミット前にパッチ品質を確認する（例: `git diff` と対象ファイルの確認）。
+- コミット前に、現在の項目について次の3点をユーザーに明示的に確認する。
+- PR レビューコメントの解釈が妥当であること。
+- 提案する修正方針が妥当であること。
+- 実際のコード変更が妥当であること（計画だけでなく、具体的な変更ファイルや hunk を示す）。
+- 3点のいずれかが未確認の場合はコミットしない。
+- ユーザーが調整を求めた場合は、コードを修正し、検証を再実行してから再確認する。
+- 各 `actionable` 項目について、ユーザーの明示的な承認後に少なくとも1つのコミットを作成する。
+- Item N のコミット後、`COMMIT_LOG` を収集し、Item N の返信本文を準備する。ただし、まだ投稿しない。
+- 項目ごとのコミットログは `COMMIT_LOG=$(git log --reverse --pretty=format:'- %h %s' "${START_SHA}..HEAD")` で作成する。
+- `COMMIT_LOG` が空の場合は、完了返信をまだ投稿しない。不足しているコミットを先に作成する。
+- どの変更がどの項目番号に対応しているかを記録する。
 
-## 5) Compose per-thread reply body
-- Write replies in Japanese by default.
-- Use this template for actionable items:
+## 5) スレッドごとの返信本文を作成する
+- 返信はデフォルトで日本語で書く。
+- `actionable` 項目には次のテンプレートを使う。
 ```text
 対応しました。ありがとうございます。
 
@@ -65,7 +133,7 @@ description: Address GitHub PR review comments for a provided PR URL. Use only w
 コミットログ:
 <COMMIT_LOG>
 ```
-- Use this template for skipped items:
+- `skip` 項目には次のテンプレートを使う。
 ```text
 今回は対応を見送ります。
 理由: <見送り理由>
@@ -73,12 +141,13 @@ description: Address GitHub PR review comments for a provided PR URL. Use only w
 コミット: なし（対応見送り）
 ```
 
-## 6) Post per-thread reply via GraphQL
-- Post one reply per processed thread using `THREAD_ID`.
-- For actionable items, post only after user-approved commits exist.
-- Post all replies only after all related commits have been pushed to remote successfully (`git push`).
-- If `git push` has not been completed or failed, do not post completion replies.
-- Use this command pattern and record the returned reply URL:
+## 6) GraphQL でスレッドごとに返信を投稿する
+- 返信投稿も必ず `gh api graphql` で行う。直接 HTTP リクエストや SDK は使わない。
+- `THREAD_ID` を使い、処理済みスレッド1件につき1つの返信を投稿する。
+- `actionable` 項目では、ユーザー承認済みのコミットが存在する場合のみ投稿する。
+- すべての関連コミットがリモートへ正常に push された後（`git push` 成功後）にのみ返信を投稿する。
+- `git push` が未実行または失敗している場合、完了返信を投稿しない。
+- 次のコマンド形式を使い、返ってきた返信 URL を記録する。
 ```bash
 REPLY_URL=$(gh api graphql \
   -f query='
@@ -92,22 +161,22 @@ REPLY_URL=$(gh api graphql \
   -F body="$REPLY_BODY" \
   --jq '.data.addPullRequestReviewThreadReply.comment.url')
 ```
-- If posting fails, re-check `gh auth status`, then retry once after re-authentication.
+- 投稿に失敗した場合は `gh auth status` を再確認し、必要に応じて再認証後に1回だけ再試行する。
 
-## 7) Report status
-- Keep a running `Addressed` list: item number, change summary, `REPLY_URL`, and `COMMIT_LOG`.
-- Keep a running `Skipped` list: item number, skip reason, and `REPLY_URL`.
-- Ensure status updates are also reported per item in processing order (Item 1 -> Item 2 -> ...).
-- End with a final summary covering all numbered items.
+## 7) 状況を報告する
+- `Addressed` リストを随時更新する。項目番号、変更概要、`REPLY_URL`、`COMMIT_LOG` を含める。
+- `Skipped` リストを随時更新する。項目番号、見送り理由、`REPLY_URL` を含める。
+- ステータス更新も処理順（Item 1 -> Item 2 -> ...）に項目ごとに報告する。
+- 最後に、すべての番号付き項目を網羅した最終サマリーを出す。
 
-## 8) Verification checklist
-- Case: multiple actionable items. Confirm each item has its own confirm->commit cycle before moving on.
-- Case: pre-commit confirmation content. Confirm it includes issue interpretation, fix approach, and actual code diff summary.
-- Case: before `git push`. Confirm no completion reply is posted yet.
-- Case: after successful `git push`. Confirm per-thread completion replies are posted.
-- Case: actionable item with one commit. Confirm reply body includes `- <short_sha> <subject>`.
-- Case: actionable item with multiple commits. Confirm reply body includes all commits in chronological order.
-- Case: actionable item before user confirmation. Confirm no commit is created yet.
-- Case: actionable item with no commit. Confirm posting is blocked until commit exists.
-- Case: skipped item. Confirm reply includes reason and `コミット: なし（対応見送り）`.
-- Case: API/auth failure. Confirm `gh auth status` re-check guidance is shown.
+## 8) 検証チェックリスト
+- ケース: 複数の `actionable` 項目。次へ進む前に、各項目で確認 -> コミットのサイクルが独立していることを確認する。
+- ケース: コミット前の確認内容。指摘の解釈、修正方針、実際のコード差分概要が含まれていることを確認する。
+- ケース: `git push` 前。完了返信がまだ投稿されていないことを確認する。
+- ケース: `git push` 成功後。スレッドごとの完了返信が投稿されていることを確認する。
+- ケース: 1コミットの `actionable` 項目。返信本文に `- <short_sha> <subject>` が含まれていることを確認する。
+- ケース: 複数コミットの `actionable` 項目。返信本文にすべてのコミットが時系列順で含まれていることを確認する。
+- ケース: ユーザー確認前の `actionable` 項目。コミットがまだ作成されていないことを確認する。
+- ケース: コミットがない `actionable` 項目。コミットが存在するまで投稿がブロックされることを確認する。
+- ケース: `skip` 項目。返信に理由と `コミット: なし（対応見送り）` が含まれていることを確認する。
+- ケース: API または認証エラー。`gh auth status` の再確認案内が示されていることを確認する。

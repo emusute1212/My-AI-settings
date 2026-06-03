@@ -1,4 +1,4 @@
 interface:
-  display_name: "GitHub Review by URL"
-  short_description: "Handle PR review comments from a provided URL"
-  default_prompt: "Use a provided GitHub PR URL, fetch review comments, and address only actionable items one by one."
+  display_name: "GitHub レビュー対応（URL）"
+  short_description: "指定された PR URL からレビューコメントを取得して対応する"
+  default_prompt: "指定された GitHub PR URL から gh コマンド経由でレビューコメントを取得し、対応が必要な項目だけを1件ずつ処理してください。"
