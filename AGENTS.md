@@ -1,72 +1,65 @@
-# User-Level Agent Instructions
+# ユーザー設定
 
-## Rough Or High-Level Requests
+## 私の特性
 
-Use this when the user gives a high-level or rough request or requirements are still fuzzy.
+たまに音声入力で話すことがあります。
 
-- Restate the goal as a concrete deliverable (what will exist when done).
-- Surface unknowns early:
-  - If blocked, ask up to 3 targeted questions.
-  - If not blocked, proceed with reasonable defaults and state assumptions explicitly.
-- Split the work and deliver iteratively:
-  - MVP first (smallest working version).
-  - Confirm direction before expanding scope or doing broad refactors.
-- Prefer minimal, reversible changes over "big-bang" rewrites.
-- When defining command-line arguments or environment variables:
-  - Start with the minimum set required to make the feature work.
-  - Avoid adding optional knobs unless they are clearly justified.
-  - Confirm proposed arguments and environment variables with the user before adding them.
-- Always include a verification step (tests, build, run, or a repro checklist).
+## ディレクトリ構造
 
-## Workflow Orchestration
+AIエージェントのスキルやルールなどは @~/.agents に格納されていて、 ~/.claude や ~/.codex にシンボリックリンクでリンクしています。
+なので、スキルやルールの編集は @~/.agents のディレクトリを編集してください。
+また、 @~/.agents/AGETNS.md は @~/.claude/CLAUDE.md や @~/AGENTS.md へシンボリックリンクしています。
 
-### 1. Plan Node Default
-- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
-- If something goes sideways, STOP and re-plan immediately – don't keep pushing
-- Use plan mode for verification steps, not just building
-- Write detailed specs upfront to reduce ambiguity
+## ワークフローのオーケストレーション
 
-### 2. Subagent Strategy
-- Use subagents liberally to keep main context window clean
-- Offload research, exploration, and parallel analysis to subagents
-- For complex problems, throw more compute at it via subagents
-- One task per subagent for focused execution
+### 1. Plan Node のデフォルト運用
+- 些細ではないタスク（3ステップ以上、または設計判断を含むもの）では、必ず plan モードに入る
+- 何かがおかしくなったら、そこで止まってすぐに再計画すること。無理に進めない
+- plan モードは実装時だけでなく、検証ステップにも使う
+- 曖昧さを減らすために、最初に詳細な仕様を書く
 
-### 3. Self-Improvement Loop
-- After ANY correction from the user: update `tasks/lessons.md` with the pattern
-- Write rules for yourself that prevent the same mistake
-- Ruthlessly iterate on these lessons until mistake rate drops
-- Review lessons at session start for relevant project
+### 2. サブエージェント戦略
+- メインのコンテキストウィンドウをきれいに保つため、サブエージェントを積極的に使う
+- 調査、探索、並列分析はサブエージェントに任せる
+- 複雑な問題には、サブエージェントを使ってより多くの計算資源を投入する
+- 各サブエージェントには1つの方針だけを持たせ、集中して実行させる
 
-### 4. Verification Before Done
-- Never mark a task complete without proving it works
-- Diff behavior between main and your changes when relevant
-- Ask yourself: "Would a staff engineer approve this?"
-- Run tests, check logs, demonstrate correctness
+### 3. 自己改善ループ
 
-### 5. Demand Elegance (Balanced)
-- For non-trivial changes: pause and ask "is there a more elegant way?"
-- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
-- Skip this for simple, obvious fixes – don't over-engineer
-- Challenge your own work before presenting it
+- ユーザーから何らかの修正を受けたら、必ずそのパターンを @$HOME/.agents/rules/context-persistence.md にしたがって記録する
+- 同じミスを防ぐためのルールを自分用に書く
+- ミスの発生率が下がるまで、これらの教訓を徹底的に改善し続ける
+- セッション開始時に、@$HOME/.agents/rules/context-persistence.mdに従って関連プロジェクト向けの教訓を見直す
 
-### 6. Autonomous Bug Fixing
-- When given a bug report: just fix it. Don't ask for hand-holding
-- Point at logs, errors, failing tests – then resolve them
-- Zero context switching required from the user
-- Go fix failing CI tests without being told how
+### 4. 完了前の検証
+- 動作することを証明せずに、タスクを完了扱いにしてはいけない
+- 必要に応じて、main と自分の変更との差分の挙動を比較する
+- 自分に問いかけること：「スタッフエンジニアならこれを承認するか？」
+- テストを実行し、ログを確認し、正しさを示す
 
-## Task Management
+### 5. 洗練された解決策を求める（バランス重視）
+- 些細ではない変更では、一度立ち止まって「もっと洗練されたやり方はないか？」と考える
+- 修正が場当たり的に感じられるなら、「今わかっていることを踏まえて、より洗練された解決策を実装する」
+- ただし、単純で明白な修正についてはこれを省略し、過剰設計しない
+- 提出前に、自分の仕事に対して批判的に見直す
 
-1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
-2. **Verify Plan**: Check in before starting implementation
-3. **Track Progress**: Mark items complete as you go
-4. **Explain Changes**: High-level summary at each step
-5. **Document Results**: Add review section to `tasks/todo.md`
-6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+### 6. 自律的なバグ修正
+- バグ報告を受けたら、とにかく修正する。手取り足取りの指示を求めない
+- ログ、エラー、失敗しているテストを確認し、それを解決する
+- ユーザーにコンテキストスイッチを要求しない
+- どう直すか指示されなくても、失敗している CI テストを修正しに行く
 
-## Core Principles
+## タスク管理
 
-- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
-- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
-- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+1. **まず計画**: @$HOME/.agents/rules/context-persistence.md にしたがってチェック可能な項目として計画を書く
+2. **計画を確認**: 実装を始める前に確認を入れる
+3. **進捗を追跡**: 進めながら項目を完了済みにする
+4. **変更を説明**: 各ステップで概要を説明する
+5. **結果を文書化**: @$HOME/.agents/rules/context-persistence.md にしたがってTODO.mdにレビュー欄を追加する
+6. **教訓を記録**: 修正を受けた後は @$HOME/.agents/rules/context-persistence.md にしたがってCONTEXT.mdを更新する
+
+## 基本原則
+
+- **まずシンプルに**: すべての変更は可能な限りシンプルにする。影響するコードは最小限にする
+- **手を抜かない**: 根本原因を見つける。一時しのぎの修正はしない。シニア開発者水準を保つ
+- **影響を最小限に**: 必要な箇所だけを変更する。バグを持ち込まないようにする
